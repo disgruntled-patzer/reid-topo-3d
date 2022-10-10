@@ -1,0 +1,5 @@
+# csv files containing detections
+csv/*
+
+# sample images
+pics/*
