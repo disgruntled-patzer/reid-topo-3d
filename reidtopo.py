@@ -1,7 +1,6 @@
 import csv
 # import cv2
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 import math
 import numpy as np
 from scipy.spatial import Delaunay
@@ -19,8 +18,8 @@ from scipy.spatial import Delaunay
 ##########################
 
 USE_3D = True
-IMG_WIDTH = 1280
-IMG_HEIGHT = 720
+IMG_WIDTH = 1920
+IMG_HEIGHT = 1080
 XMIN = 1
 YMIN = 2
 XMAX = 3
@@ -157,7 +156,13 @@ class camera:
                 self.T[base].add_triangle(neighbours)
     
     # generate 3d coords of all delaunay triangle vertices relative to a target
+    # return coords of the 0th indexed triangle for 3d visualisation purposes
     def generate_3d_triangle_coords(self):
+
+        x_data = [0]
+        y_data = [0]
+        z_data = [0]
+        
         for triangle in self.delaunay_map.simplices:
             for base in triangle:
                 base_area = self.areas[base]
@@ -170,21 +175,15 @@ class camera:
                         dz = (1/area_ratio) - 1 # 3d path re-id, depth est formula
                         neighbours.append(np.array([dx, dy, dz]))
                 self.T[base].add_triangle(neighbours)
-                print(f'Base {base} of camera {self.cam_ID} has neighbours {neighbours}')
+                # print(f'Base {base} of camera {self.cam_ID} has neighbours {neighbours}')
 
                 # 3d visualisation
-                # if base == 0:
-                #     fig = plt.figure()
-                #     ax = plt.axes(projection='3d')
-                #     x_data = [0]
-                #     y_data = [0]
-                #     z_data = [0]
-                #     for i in range(2):
-                #         x_data.append(neighbours[i][0])
-                #         y_data.append(neighbours[i][1])
-                #         z_data.append(neighbours[i][2])
-                #     ax.scatter3D(x_data, y_data, z_data, c=z_data)
-                #     plt.draw()
+                if base == 0:
+                    for i in range(2):
+                        x_data.append(neighbours[i][0])
+                        y_data.append(neighbours[i][1])
+                        z_data.append(neighbours[i][2])
+        return x_data, y_data, z_data
 
 #################
 # re-id functions
@@ -223,13 +222,26 @@ def get_weighted_similarity(topology_seq_a, topology_seq_b):
 # main pipeline
 ###############
 
+# 3d visualisation
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+
 # extract info on detected objects
 cameras = (camera(0, csv_files[0]), camera(1, csv_files[1]))
 for cam in cameras:
     cam.get_target_areas_centroids()
     cam.generate_delaunay()
     if USE_3D:
-        cam.generate_3d_triangle_coords()
+        x_data, y_data, z_data = cam.generate_3d_triangle_coords()
+        # 3d visualisation
+        if cam.cam_ID == 0:
+            m = 'o'
+        else:
+            m = '^'
+        ax.scatter(x_data, y_data, z_data, marker=m)
     else:
         cam.generate_2d_triangle_coords()
 
