@@ -17,6 +17,7 @@ from scipy.spatial import Delaunay
 # functions and parameters
 ##########################
 
+VISUALISE_3D = False
 IMG_WIDTH = 1920
 IMG_HEIGHT = 1080
 XMIN = 1
@@ -30,7 +31,7 @@ csv_files = [
 
 # Euler angles (deg) and position of Camera 1 w.r.t. Camera 0
 EULER_Z = 0.0
-EULER_Y = 0.0
+EULER_Y = -30.0
 EULER_X = 0.0
 POS_Z = 0.0
 POS_Y = 0.0
@@ -41,13 +42,6 @@ def get_angle(a, b):
     dot_product = np.dot(a, b)
     norm_product = np.linalg.norm(a) * np.linalg.norm(b)
     return np.arccos(dot_product / norm_product)
-
-# solid angle about Point O in a tetrahedral OABC using L'Huilier's Thm
-def solid_angle(theta_a, theta_b, theta_c):
-    theta_s = 0.5*(theta_a + theta_b + theta_c)
-    temp = math.sqrt(math.tan(0.5*theta_s) * math.tan(0.5*(theta_s - theta_a)) * \
-        math.tan(0.5*(theta_s - theta_b)) * math.tan(0.5*(theta_s - theta_c)))
-    return 4*math.atan(temp)
 
 # extract data from csv file
 def extract_data(src):
@@ -133,7 +127,11 @@ class camera:
 # main pipeline
 ###############
 
-fig = plt.figure(figsize=plt.figaspect(0.5))
+if VISUALISE_3D:
+    fig = plt.figure(figsize=plt.figaspect(0.5))
+else:
+    fig = plt.figure()
+    ax = fig.add_subplot()
 
 # extract info on detected objects
 cameras = (
@@ -145,14 +143,25 @@ for cam in cameras:
     cam.generate_3d_coords()
     cam.transform_coords()
 
-    ax = fig.add_subplot(1, 2, cam.cam_ID+1, projection='3d')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    if cam.cam_ID:
-        m = 'o'
+    # 3d visualisation
+    if VISUALISE_3D:
+        ax = fig.add_subplot(1, 2, cam.cam_ID+1, projection='3d')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        if cam.cam_ID:
+            m = 'o'
+        else:
+            m = '^'
+        ax.scatter(cam.transformed[:,0], cam.transformed[:,1], cam.transformed[:,2], marker=m)
     else:
-        m = '^'
-    ax.scatter(cam.transformed[:,0], cam.transformed[:,1], cam.transformed[:,2], marker=m)
+        # 2d visualisation
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        if cam.cam_ID:
+            m = 'o'
+        else:
+            m = '^'
+        ax.scatter(cam.transformed[:,0], cam.transformed[:,1], marker=m)
 
 plt.show()
