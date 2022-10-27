@@ -56,6 +56,52 @@ def extract_data(src):
 # camera and topology classes
 #############################
 
+class delaunay_triangle:
+    def __init__(self, ID, neighbours):
+        self.base_ID_ = ID
+        self.neighbours_ = neighbours
+    
+    def get_base_ID(self):
+        return self.base_ID_
+    
+    def get_base_angle(self):
+        return get_angle(self.neighbours_[0], self.neighbours_[1])
+    
+    def get_neighbour_angle_0(self):
+        angle_0 = get_angle(-self.neighbours_[0], \
+            np.subtract(self.neighbours_[1], self.neighbours_[0]))
+        return angle_0
+    
+    def get_neighbour_angle_1(self):
+        angle_1 = get_angle(-self.neighbours_[1], \
+            np.subtract(self.neighbours_[0], self.neighbours_[1]))
+        return angle_1
+
+# the full set of triangle topogical features for a specified target ID
+class topology_seq:
+    def __init__(self, ID):
+        self.base_ID_ = ID
+        self.triangles_ = []
+    
+    def add_triangle(self, neighbours):
+        triangle = delaunay_triangle(self.base_ID_, neighbours)
+        self.triangles_.append(triangle)
+    
+    def topology_seq_size(self):
+        return len(self.triangles_)
+    
+    def get_triangle(self, id):
+        return self.triangles_[id]
+
+    def get_triangle_base_angle(self, id):
+        return self.triangles_[id].get_base_angle()
+    
+    def sum_of_base_angles(self):
+        total = 0
+        for triangle in self.triangles_:
+            total += triangle.get_base_angle()
+        return total
+
 class camera:
 
     # extract data from csv files and generate other parameters
@@ -70,8 +116,10 @@ class camera:
         self.IDs = list(range(0,self.num_of_targets))
         self.areas = np.ones(self.num_of_targets)
         self.centroids = np.ones([self.num_of_targets,2])
+
+        # transformed target data
         self.coords3d = np.zeros([self.num_of_targets,3])
-        self.transformed = self.coords3d
+        self.transformed = np.zeros([self.num_of_targets,3])
 
         # euler (ZYX) rotation matrix and position vector relative to global frame
         eul_x = math.radians(eul_ang[0])
@@ -88,6 +136,13 @@ class camera:
         self.rot_matrix[2][1] = math.sin(eul_x)*math.cos(eul_y)
         self.rot_matrix[2][2] = math.cos(eul_x)*math.cos(eul_y)
         self.pos_vec = np.array(rel_pos)
+
+        # topological data
+        self.delaunay_map = []
+        self.T = []
+        for i in range(self.num_of_targets):
+            t = topology_seq(i)
+            self.T.append(t)
     
     # assign target IDs and extract areas + XY centroids from CSV data
     # convert from image convention (origin at top left)
@@ -121,7 +176,59 @@ class camera:
     # transform given 3d coordinates from camera to global frame
     def transform_coords(self):
         for id in range(self.num_of_targets):
-            self.transformed[id,:] = self.pos_vec + self.rot_matrix.dot(self.coords3d[id,:])
+            self.transformed[id,:] = self.pos_vec + np.matmul(self.rot_matrix, self.coords3d[id,:])
+    
+    # generate map of delaunay triangles for 2D XY projections of transformed targets
+    def generate_delaunay(self):
+        projections_2d = self.transformed[:,:2]
+        self.delaunay_map = Delaunay(projections_2d)
+        # print(self.delaunay_map.simplices[0][0])
+        # simplices -> triangle (1st array id) -> vertex (2nd array id)
+    
+    # generate 2d vectors of all delaunay triangle vertices relative to a target
+    def generate_delaunay_triangle_vectors(self):
+        for triangle in self.delaunay_map.simplices:
+            for base in triangle:
+                neighbours = []
+                for vertex in triangle:
+                    if not vertex == base:
+                        dx = self.centroids[vertex][0] - self.centroids[base][0]
+                        dy = self.centroids[vertex][1] - self.centroids[base][1]
+                        neighbours.append(np.array([dx, dy]))
+                self.T[base].add_triangle(neighbours)
+
+#################
+# re-id functions
+#################
+
+# source: Xudong et al (2022) https://www.mdpi.com/2504-446X/6/5/119 (Eq 4 - 6)
+
+# w_iaib-x
+def triangle_similarity(triangle_a, triangle_b):
+    diff = 0
+    diff += abs(triangle_a.get_base_angle() - triangle_b.get_base_angle())
+    diff += abs(triangle_a.get_neighbour_angle_0() - triangle_b.get_neighbour_angle_0())
+    diff += abs(triangle_a.get_neighbour_angle_1() - triangle_b.get_neighbour_angle_1())
+    return 1 - math.log(1 + 1.72*diff/180)
+
+# w_iaib
+def get_weighted_similarity(topology_seq_a, topology_seq_b):
+
+    # alpha_iaib
+    denom = topology_seq_a.sum_of_base_angles() + topology_seq_b.sum_of_base_angles()
+
+    # compare each triangle in a with each triangle in b
+    numer = 0
+    for i in range(topology_seq_a.topology_seq_size()):
+        triangle_a = topology_seq_a.get_triangle(i)
+        base_angle_a = topology_seq_a.get_triangle_base_angle(i)
+        for j in range(topology_seq_b.topology_seq_size()):
+            triangle_b = topology_seq_b.get_triangle(j)
+            base_angle_b = topology_seq_b.get_triangle_base_angle(j)
+            numer += (base_angle_a + base_angle_b) * \
+                triangle_similarity(triangle_a, triangle_b)
+    
+    return numer / denom
 
 ###############
 # main pipeline
@@ -142,6 +249,8 @@ for cam in cameras:
     cam.get_target_areas_centroids()
     cam.generate_3d_coords()
     cam.transform_coords()
+    cam.generate_delaunay()
+    cam.generate_delaunay_triangle_vectors()
 
     # 3d visualisation
     if VISUALISE_3D:
@@ -162,6 +271,15 @@ for cam in cameras:
             m = 'o'
         else:
             m = '^'
+        ax.triplot(cam.transformed[:,0], cam.transformed[:,1], cam.delaunay_map.simplices)
         ax.scatter(cam.transformed[:,0], cam.transformed[:,1], marker=m)
+
+# calculate similarity score matrix
+W = np.zeros([cameras[0].num_of_targets, cameras[1].num_of_targets])
+for a in cameras[0].IDs:
+    for b in cameras[1].IDs:
+        similarity = get_weighted_similarity(cameras[0].T[a], cameras[1].T[b])
+        W[a,b] = similarity
+print(W)
 
 plt.show()
