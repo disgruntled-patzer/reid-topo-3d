@@ -29,13 +29,13 @@ csv_files = [
     'data/csv/ball_4.csv'
 ]
 
-# Euler angles (deg) and position of Camera 1 w.r.t. Camera 0
-EULER_Z = 0.0
-EULER_Y = -30.0
+# XYZ FIXED angles (deg) and position of Camera 1 w.r.t. Camera 0
 EULER_X = 0.0
-POS_Z = 0.0
-POS_Y = 0.0
+EULER_Y = 30.0
+EULER_Z = 0.0
 POS_X = 0.0
+POS_Y = 0.0
+POS_Z = 0.0
 
 # get angle (radian) between two vectors a and b (represented as arrays)
 def get_angle(a, b):
@@ -121,7 +121,7 @@ class camera:
         self.coords3d = np.zeros([self.num_of_targets,3])
         self.transformed = np.zeros([self.num_of_targets,3])
 
-        # euler (ZYX) rotation matrix and position vector relative to global frame
+        # XYZ fixed angle rotation matrix from global frame to camera
         eul_x = math.radians(eul_ang[0])
         eul_y = math.radians(eul_ang[1])
         eul_z = math.radians(eul_ang[2])
@@ -135,6 +135,11 @@ class camera:
         self.rot_matrix[2][0] = -math.sin(eul_y)
         self.rot_matrix[2][1] = math.sin(eul_x)*math.cos(eul_y)
         self.rot_matrix[2][2] = math.cos(eul_x)*math.cos(eul_y)
+
+        # we will rotate from camera back to global frame, thus the rotation matrix must be inversed
+        self.rot_matrix = np.linalg.inv(self.rot_matrix)
+
+        # position vector of camera relative to global frame
         self.pos_vec = np.array(rel_pos)
 
         # topological data
@@ -246,6 +251,7 @@ cameras = (
     camera(1, csv_files[1], [EULER_X, EULER_Y, EULER_Z], [POS_X, POS_Y, POS_Z])
     )
 for cam in cameras:
+    # transformation and topography map generation
     cam.get_target_areas_centroids()
     cam.generate_3d_coords()
     cam.transform_coords()
