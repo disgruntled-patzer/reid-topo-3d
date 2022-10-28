@@ -5,13 +5,24 @@ import math
 import numpy as np
 from scipy.spatial import Delaunay
 
-# data format saved by Yolo V5:
+##############################
+# data format saved by Yolo V5
+##############################
+
 # id    xmin    ymin    xmax   ymax  confidence  class    name
 #  0  749.50   43.50  1148.0  704.5    0.874023      0  person
 #  1  433.50  433.50   517.5  714.5    0.687988     27     tie
 #  2  114.75  195.75  1095.0  708.0    0.624512      0  person
 #  3  986.00  304.00  1028.0  420.0    0.286865     27     tie
 # (xmin,ymin) is top-left, (xmax,ymax) is lower right. (0,0) is top-left of img
+
+#############################
+# Convention for global frame
+#############################
+
+# the global frame is similar to a camera pointing vertically 
+# downwards at the plane containing the targets, with Camera 0's 
+# y-axis aligned with the global frame
 
 ##########################
 # functions and parameters
@@ -25,12 +36,12 @@ YMIN = 2
 XMAX = 3
 YMAX = 4
 csv_files = [
-    'data/csv/ball_3.csv',
-    'data/csv/ball_4.csv'
+    'data/csv/football_0.csv',
+    'data/csv/football_1.csv'
 ]
 img_files = [
-    'data/pics/ball_3.png',
-    'data/pics/ball_4.png'
+    'data/pics/football_0.png',
+    'data/pics/football_1.png'
 ]
 colours = [
     (0, 255, 0), # 1
@@ -45,13 +56,13 @@ colours = [
     (147, 226, 255) # 10
 ]
 
-# XYZ FIXED angles (deg) and position of Camera 1 w.r.t. Camera 0
-EULER_X = 0.0
-EULER_Y = 30.0
-EULER_Z = 0.0
-POS_X = 0.0
-POS_Y = 0.0
-POS_Z = 0.0
+# Euler ZYX Tait-Bryan angles (deg) of Cameras 0 and 1 w.r.t. global frame
+EULER_X_0 = 0.0
+EULER_Y_0 = 30.0
+EULER_Z_0 = 0.0
+EULER_X_1 = 60.0
+EULER_Y_1 = 50.0
+EULER_Z_1 = 80.0
 
 # get angle (radian) between two vectors a and b (represented as arrays)
 def get_angle(a, b):
@@ -121,7 +132,7 @@ class topology_seq:
 class camera:
 
     # extract data from csv files and generate other parameters
-    def __init__(self, cam_ID, csv_file, img, eul_ang, rel_pos) -> None:
+    def __init__(self, cam_ID, csv_file, img, eul_ang) -> None:
 
         # csv and img data
         self.cam_ID = cam_ID
@@ -138,7 +149,7 @@ class camera:
         self.coords3d = np.zeros([self.num_of_targets,3])
         self.transformed = np.zeros([self.num_of_targets,3])
 
-        # XYZ fixed angle rotation matrix from global frame to camera
+        # Euler ZYX angle rotation matrix from global frame to camera
         eul_x = math.radians(eul_ang[0])
         eul_y = math.radians(eul_ang[1])
         eul_z = math.radians(eul_ang[2])
@@ -155,9 +166,6 @@ class camera:
 
         # we will rotate from camera back to global frame, thus the rotation matrix must be inversed
         self.rot_matrix = np.linalg.inv(self.rot_matrix)
-
-        # position vector of camera relative to global frame
-        self.pos_vec = np.array(rel_pos)
 
         # topological data
         self.delaunay_map = []
@@ -198,7 +206,7 @@ class camera:
     # transform given 3d coordinates from camera to global frame
     def transform_coords(self):
         for id in range(self.num_of_targets):
-            self.transformed[id,:] = self.pos_vec + np.matmul(self.rot_matrix, self.coords3d[id,:])
+            self.transformed[id,:] = np.matmul(self.rot_matrix, self.coords3d[id,:])
     
     # generate map of delaunay triangles for 2D XY projections of transformed targets
     def generate_delaunay(self):
@@ -264,8 +272,8 @@ else:
 
 # extract info on detected objects
 cameras = (
-    camera(0, csv_files[0], img_files[0], [0.0,0.0,0.0], [0.0,0.0,0.0]), 
-    camera(1, csv_files[1], img_files[1], [EULER_X, EULER_Y, EULER_Z], [POS_X, POS_Y, POS_Z])
+    camera(0, csv_files[0], img_files[0], [EULER_X_0, EULER_Y_0, EULER_Z_0]), 
+    camera(1, csv_files[1], img_files[1], [EULER_X_1, EULER_Y_1, EULER_Z_1])
     )
 for cam in cameras:
     # transformation and topography map generation
