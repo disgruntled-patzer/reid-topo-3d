@@ -1,5 +1,5 @@
 import csv
-# import cv2
+import cv2
 import matplotlib.pyplot as plt
 import math
 import numpy as np
@@ -27,6 +27,22 @@ YMAX = 4
 csv_files = [
     'data/csv/ball_3.csv',
     'data/csv/ball_4.csv'
+]
+img_files = [
+    'data/pics/ball_3.png',
+    'data/pics/ball_4.png'
+]
+colours = [
+    (0, 255, 0), # 1
+    (255, 0, 0), # 2
+    (0, 0, 255), # 3
+    (143, 89, 255), # 4
+    (6, 39, 156), # 5
+    (92, 215, 206), # 6
+    (105, 139, 246), # 7
+    (84, 43, 0), # 8
+    (137, 171, 197), # 9
+    (147, 226, 255) # 10
 ]
 
 # XYZ FIXED angles (deg) and position of Camera 1 w.r.t. Camera 0
@@ -105,11 +121,12 @@ class topology_seq:
 class camera:
 
     # extract data from csv files and generate other parameters
-    def __init__(self, cam_ID, csv_file, eul_ang, rel_pos) -> None:
+    def __init__(self, cam_ID, csv_file, img, eul_ang, rel_pos) -> None:
 
-        # csv data
+        # csv and img data
         self.cam_ID = cam_ID
         self.csv_data = extract_data(csv_file)
+        self.img = cv2.imread(img)
 
         # basic target data. IDs are zero indexed
         self.num_of_targets = len(self.csv_data)
@@ -247,8 +264,8 @@ else:
 
 # extract info on detected objects
 cameras = (
-    camera(0, csv_files[0], [0.0,0.0,0.0], [0.0,0.0,0.0]), 
-    camera(1, csv_files[1], [EULER_X, EULER_Y, EULER_Z], [POS_X, POS_Y, POS_Z])
+    camera(0, csv_files[0], img_files[0], [0.0,0.0,0.0], [0.0,0.0,0.0]), 
+    camera(1, csv_files[1], img_files[1], [EULER_X, EULER_Y, EULER_Z], [POS_X, POS_Y, POS_Z])
     )
 for cam in cameras:
     # transformation and topography map generation
@@ -280,12 +297,42 @@ for cam in cameras:
         ax.triplot(cam.transformed[:,0], cam.transformed[:,1], cam.delaunay_map.simplices)
         ax.scatter(cam.transformed[:,0], cam.transformed[:,1], marker=m)
 
-# calculate similarity score matrix
+# calculate similarity score matrix W
 W = np.zeros([cameras[0].num_of_targets, cameras[1].num_of_targets])
 for a in cameras[0].IDs:
     for b in cameras[1].IDs:
         similarity = get_weighted_similarity(cameras[0].T[a], cameras[1].T[b])
         W[a,b] = similarity
-print(W)
+
+# "matched" - for each target ID in Camera 0 (represented by the row of "matched"), 
+# get the ID of the matched target in Camera 1 (represented by the value in "matched")
+matched = np.argmax(W, axis=1)
+
+# annotate re-id images
+combined_img = cv2.hconcat([cameras[0].img, cameras[1].img])
+
+for id0 in cameras[0].IDs:
+    # Camera 0 "id0" is matched with Camera 1 "id1"
+    id1 = matched[id0]
+
+    # generate target centroid coordinates to be annotated on the frame
+    id0_coords = cameras[0].centroids[id0].copy()
+    # transform from standard coords (origin at bottom left) to img coords (origin at top left)
+    id0_coords[1] = IMG_HEIGHT - id0_coords[1]
+    # convert centroid floats to int
+    id0_coords = [int(x) for x in id0_coords]
+    # convert to tuple to be compatible with OpenCV line
+    id0_coords = tuple(id0_coords)
+
+    id1_coords = cameras[1].centroids[id1].copy()
+    id1_coords[1] = IMG_HEIGHT - id1_coords[1]
+    # transpose to the right for Camera 1 IDs
+    id1_coords[0] += IMG_WIDTH
+    id1_coords = [int(x) for x in id1_coords]
+    id1_coords = tuple(id1_coords)
+
+    combined_img = cv2.line(combined_img, id0_coords, id1_coords, colours[id0%10], 3)
+
+cv2.imwrite('data/pics/saved.jpg', combined_img)
 
 plt.show()
