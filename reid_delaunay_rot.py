@@ -1,3 +1,31 @@
+# reid_delaunay_rot.py
+# Lau Yan Han (2022)
+#
+# Overview:
+# Similar to reid_delaunay.py. However, the 3D coordinates of
+# all targets are estimated relative to the 1st detected target
+# and then Euler rotation is performed to transform these coordinates
+# into a global frame. Then the re-identification process and output 
+# is similar to reid_delaunay.py.
+#
+# Inputs: 
+# 1. csv files with detected targets (one for each target). Stored as
+# a size 2 list in variable csv_files, one cell for each camera
+# 2. original image files. Stored as a size 2 list in variable img_files,
+# one cell for each camera. Use for visualisation purposes later
+# 3. "EULER_*" set of parameters. These specify the Euler Angles
+# (in degrees) of each camera relative to the global frame
+# 
+# Outputs:
+# 1. Similarity score matrix (printed on terminal)
+# 2. Visualisation of re-id results across both images - saved in
+# 'data/pics' folder and displayed in a new window
+# 
+# Convention for global frame:
+# The global frame is similar to a camera pointing vertically 
+# downwards at the plane containing the targets, with Camera 0's 
+# y-axis aligned with the global frame.
+
 import csv
 import cv2
 import matplotlib.pyplot as plt
@@ -15,14 +43,6 @@ from scipy.spatial import Delaunay
 #  2  114.75  195.75  1095.0  708.0    0.624512      0  person
 #  3  986.00  304.00  1028.0  420.0    0.286865     27     tie
 # (xmin,ymin) is top-left, (xmax,ymax) is lower right. (0,0) is top-left of img
-
-#############################
-# Convention for global frame
-#############################
-
-# the global frame is similar to a camera pointing vertically 
-# downwards at the plane containing the targets, with Camera 0's 
-# y-axis aligned with the global frame
 
 ##########################
 # functions and parameters
@@ -58,11 +78,11 @@ colours = [
 
 # Euler ZYX Tait-Bryan angles (deg) of Cameras 0 and 1 w.r.t. global frame
 EULER_X_0 = 0.0
-EULER_Y_0 = 30.0
-EULER_Z_0 = 0.0
-EULER_X_1 = 60.0
-EULER_Y_1 = 50.0
-EULER_Z_1 = 80.0
+EULER_Y_0 = 20.0
+EULER_Z_0 = -50.0
+EULER_X_1 = 0.0
+EULER_Y_1 = 30.0
+EULER_Z_1 = 0.0
 
 # get angle (radian) between two vectors a and b (represented as arrays)
 def get_angle(a, b):

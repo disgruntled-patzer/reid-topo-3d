@@ -1,3 +1,19 @@
+# reid_delaunay.py
+# Lau Yan Han (2022)
+#
+# Overview:
+# Generate 2D topological map of targets in two camera images
+# using the triangular topological sequence in Xudong et al (2022).
+#
+# Then, perform re-identification and generate the matrix of similarity
+# scores across targets.
+#
+# Input: csv files with detected targets (one for each target). Stored as
+# a size 2 list in variable csv_files, one cell for each camera
+#
+# Key parameter: USE_3D - Set to true to estimate 3D coordinates and use
+# then for re-identification. Otherwise, the 2D coordinates will be used.
+
 import csv
 # import cv2
 import matplotlib.pyplot as plt
@@ -5,7 +21,10 @@ import math
 import numpy as np
 from scipy.spatial import Delaunay
 
-# data format saved by Yolo V5:
+##############################
+# data format saved by Yolo V5
+##############################
+
 # id    xmin    ymin    xmax   ymax  confidence  class    name
 #  0  749.50   43.50  1148.0  704.5    0.874023      0  person
 #  1  433.50  433.50   517.5  714.5    0.687988     27     tie

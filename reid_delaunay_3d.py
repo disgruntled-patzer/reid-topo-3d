@@ -1,3 +1,12 @@
+# reid_delaunay_3d.py
+# Lau Yan Han (2022)
+#
+# Overview:
+# Similar to reid_delaunay.py. This time, relative 3D coordinates
+# are estimated for each target (relative to the first detected target
+# for each camera) before 3D Delaunay Triangles are generated. Then the
+# re-identification process and output is similar to reid_delaunay.py
+
 import csv
 # import cv2
 import matplotlib.pyplot as plt
@@ -5,7 +14,10 @@ import math
 import numpy as np
 from scipy.spatial import Delaunay
 
-# data format saved by Yolo V5:
+##############################
+# data format saved by Yolo V5
+##############################
+
 # id    xmin    ymin    xmax   ymax  confidence  class    name
 #  0  749.50   43.50  1148.0  704.5    0.874023      0  person
 #  1  433.50  433.50   517.5  714.5    0.687988     27     tie
