@@ -1,2 +1,6 @@
 # yolo saved images
 runs/*
+
+# pycache files
+__pycache__/*
+*.pyc

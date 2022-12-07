@@ -14,6 +14,7 @@
 import img_lib
 import matplotlib.pyplot as plt
 import numpy as np
+import img_parameters as parm
 from scipy.spatial import ConvexHull
 
 ##############################
@@ -30,21 +31,6 @@ from scipy.spatial import ConvexHull
 ##########################
 # functions and parameters
 ##########################
-
-IMG_WIDTH = 1920
-IMG_HEIGHT = 1080
-XMIN = 1
-YMIN = 2
-XMAX = 3
-YMAX = 4
-csv_files = [
-    'data/csv/frisbee_0.csv',
-    'data/csv/frisbee_1.csv'
-]
-img_files = [
-    'data/pics/frisbee_0.png',
-    'data/pics/frisbee_1.png'
-]
 
 # return intersection of two 2d lines in x-y coordinates (ndarray format)
 # input: endpoints of both lines (x-y ndarray format)
@@ -144,7 +130,8 @@ ax = fig.add_subplot()
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 
-cameras = (camera(0, csv_files[0], img_files[0]), camera(1, csv_files[1], img_files[1]))
+cameras = (camera(0, parm.csv_files[0], parm.img_files[0]), 
+            camera(1, parm.csv_files[1], parm.img_files[1]))
 for cam in cameras:
     # generate initial data
     cam.get_target_areas_centroids()
