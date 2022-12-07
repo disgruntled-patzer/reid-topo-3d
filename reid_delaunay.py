@@ -11,57 +11,18 @@
 # Input: csv files with detected targets (one for each target). Stored as
 # a size 2 list in variable csv_files, one cell for each camera
 #
-# Key parameter: USE_3D - Set to true to estimate 3D coordinates and use
+# Output: visualisation of re-id results across both images - saved in
+# 'data/pics' folder and displayed in a new window
+#
+# Key parameter: VISUALISE_3D - Set to true to estimate 3D coordinates and use
 # then for re-identification. Otherwise, the 2D coordinates will be used.
 
-import csv
-# import cv2
+import img_lib
+import img_parameters as parm
 import matplotlib.pyplot as plt
 import math
 import numpy as np
 from scipy.spatial import Delaunay
-
-##############################
-# data format saved by Yolo V5
-##############################
-
-# id    xmin    ymin    xmax   ymax  confidence  class    name
-#  0  749.50   43.50  1148.0  704.5    0.874023      0  person
-#  1  433.50  433.50   517.5  714.5    0.687988     27     tie
-#  2  114.75  195.75  1095.0  708.0    0.624512      0  person
-#  3  986.00  304.00  1028.0  420.0    0.286865     27     tie
-# (xmin,ymin) is top-left, (xmax,ymax) is lower right. (0,0) is top-left of img
-
-##########################
-# functions and parameters
-##########################
-
-USE_3D = True
-IMG_WIDTH = 1920
-IMG_HEIGHT = 1080
-XMIN = 1
-YMIN = 2
-XMAX = 3
-YMAX = 4
-csv_files = [
-    'data/csv/ball_1.csv',
-    'data/csv/ball_2.csv'
-]
-
-# get angle (radian) between two vectors a and b (represented as arrays)
-def get_angle(a, b):
-    dot_product = np.dot(a, b)
-    norm_product = np.linalg.norm(a) * np.linalg.norm(b)
-    return np.arccos(dot_product / norm_product)
-
-# extract data from csv file
-def extract_data(src):
-    extracted = []
-    with open (src, 'r') as csvfile:
-        csvreader = csv.reader(csvfile, quoting=csv.QUOTE_NONNUMERIC)
-        for row in csvreader:
-            extracted.append(row)
-    return extracted
 
 #############################
 # camera and topology classes
@@ -78,15 +39,15 @@ class delaunay_triangle:
         return self.base_ID_
     
     def get_base_angle(self):
-        return get_angle(self.neighbours_[0], self.neighbours_[1])
+        return img_lib.get_angle(self.neighbours_[0], self.neighbours_[1])
     
     def get_neighbour_angle_0(self):
-        angle_0 = get_angle(-self.neighbours_[0], \
+        angle_0 = img_lib.get_angle(-self.neighbours_[0], \
             np.subtract(self.neighbours_[1], self.neighbours_[0]))
         return angle_0
     
     def get_neighbour_angle_1(self):
-        angle_1 = get_angle(-self.neighbours_[1], \
+        angle_1 = img_lib.get_angle(-self.neighbours_[1], \
             np.subtract(self.neighbours_[0], self.neighbours_[1]))
         return angle_1
 
@@ -115,20 +76,11 @@ class topology_seq:
             total += triangle.get_base_angle()
         return total
 
-class camera:
+class camera(img_lib.camera_base):
 
     # extract data from csv files and generate other parameters
-    def __init__(self, cam_ID, csv_file) -> None:
-
-        # csv data
-        self.cam_ID = cam_ID
-        self.csv_data = extract_data(csv_file)
-
-        # basic target data. IDs are zero indexed
-        self.num_of_targets = len(self.csv_data)
-        self.IDs = list(range(0,self.num_of_targets))
-        self.areas = np.ones(self.num_of_targets)
-        self.centroids = np.ones([self.num_of_targets,2])
+    def __init__(self, cam_ID, csv_file, img) -> None:
+        super().__init__(cam_ID, csv_file, img)
 
         # topological data
         self.delaunay_map = []
@@ -137,30 +89,9 @@ class camera:
             t = topology_seq(i)
             self.T.append(t)
     
-    # assign target IDs and extract areas + XY centroids from CSV data
-    # convert from image convention (origin at top left)
-    # to standard XY convention (origin at bottom left)
-    def get_target_areas_centroids(self):
-        id = 0
-        for row in self.csv_data:
-            width = abs(row[XMAX] - row[XMIN])
-            height = abs(row[YMAX] - row[YMIN])
-            self.areas[id] = width*height
-            cen_x = 0.5*(row[XMAX] + row[XMIN])
-            cen_y = IMG_HEIGHT - 0.5*(row[YMAX] + row[YMIN])
-            self.centroids[id][0] = cen_x
-            self.centroids[id][1] = cen_y
-            id += 1
-    
     # generate map of delaunay triangles for all targets in camera
     def generate_delaunay(self):
         self.delaunay_map = Delaunay(self.centroids)
-        
-        # plt.triplot(self.centroids[:,0], self.centroids[:,1], self.delaunay_map.simplices)
-        # plt.plot(self.centroids[:,0], self.centroids[:,1], 'o')
-        # plt.draw()
-        # print_delaunay_map.simplices[0][0]
-        # simplices -> triangle (1st array id) -> vertex (2nd array id)
     
     # generate 2d coords of all delaunay triangle vertices relative to a target
     def generate_2d_triangle_coords(self):
@@ -194,8 +125,6 @@ class camera:
                         dz = (1/area_ratio) - 1 # 3d path re-id, depth est formula
                         neighbours.append(np.array([dx, dy, dz]))
                 self.T[base].add_triangle(neighbours)
-                # print(f'Base {base} of camera {self.cam_ID} has neighbours {neighbours}')
-
                 # 3d visualisation
                 if base == 0:
                     for i in range(2):
@@ -241,28 +170,41 @@ def get_weighted_similarity(topology_seq_a, topology_seq_b):
 # main pipeline
 ###############
 
-# 3d visualisation
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
+if parm.VISUALISE_3D:
+    fig = plt.figure(figsize=plt.figaspect(0.5))
+else:
+    fig = plt.figure()
+    ax = fig.add_subplot()
 
 # extract info on detected objects
-cameras = (camera(0, csv_files[0]), camera(1, csv_files[1]))
+cameras = (camera(0, parm.csv_files[0], parm.img_files[0]), 
+            camera(1, parm.csv_files[1], parm.img_files[1]))
 for cam in cameras:
     cam.get_target_areas_centroids()
     cam.generate_delaunay()
-    if USE_3D:
+    if parm.VISUALISE_3D:
         x_data, y_data, z_data = cam.generate_3d_triangle_coords()
-        # 3d visualisation
-        if cam.cam_ID == 0:
+        # 3d visualisation of delaunay triangles
+        ax = fig.add_subplot(1, 2, cam.cam_ID+1, projection='3d')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        if cam.cam_ID:
             m = 'o'
         else:
             m = '^'
         ax.scatter(x_data, y_data, z_data, marker=m)
     else:
         cam.generate_2d_triangle_coords()
+        # 2d visualisation of delaunay triangles
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        if cam.cam_ID:
+            m = 'o'
+        else:
+            m = '^'
+        ax.triplot(cam.centroids[:,0], cam.centroids[:,1], cam.delaunay_map.simplices)
+        ax.scatter(cam.centroids[:,0], cam.centroids[:,1], marker=m)
 
 # calculate similarity score matrix
 W = np.zeros([cameras[0].num_of_targets, cameras[1].num_of_targets])
@@ -270,5 +212,10 @@ for a in cameras[0].IDs:
     for b in cameras[1].IDs:
         similarity = get_weighted_similarity(cameras[0].T[a], cameras[1].T[b])
         W[a,b] = similarity
-print(W)
+
+# Re-ID visualisation
+img_lib.annotate_and_save_reid(cameras[0].img, cameras[1].img,
+                                cameras[0].centroids, cameras[1].centroids,
+                                cameras[0].IDs, W, use_max=True)
+
 plt.show()

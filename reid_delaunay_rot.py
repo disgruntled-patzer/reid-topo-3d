@@ -16,9 +16,7 @@
 # 3. "EULER_*" set of parameters. These specify the Euler Angles
 # (in degrees) of each camera relative to the global frame
 # 
-# Outputs:
-# 1. Similarity score matrix (printed on terminal)
-# 2. Visualisation of re-id results across both images - saved in
+# Output: visualisation of re-id results across both images - saved in
 # 'data/pics' folder and displayed in a new window
 # 
 # Convention for global frame:
@@ -26,78 +24,12 @@
 # downwards at the plane containing the targets, with Camera 0's 
 # y-axis aligned with the global frame.
 
-import csv
-import cv2
+import img_lib
+import img_parameters as parm
 import matplotlib.pyplot as plt
 import math
 import numpy as np
 from scipy.spatial import Delaunay
-
-##############################
-# data format saved by Yolo V5
-##############################
-
-# id    xmin    ymin    xmax   ymax  confidence  class    name
-#  0  749.50   43.50  1148.0  704.5    0.874023      0  person
-#  1  433.50  433.50   517.5  714.5    0.687988     27     tie
-#  2  114.75  195.75  1095.0  708.0    0.624512      0  person
-#  3  986.00  304.00  1028.0  420.0    0.286865     27     tie
-# (xmin,ymin) is top-left, (xmax,ymax) is lower right. (0,0) is top-left of img
-
-##########################
-# functions and parameters
-##########################
-
-VISUALISE_3D = False
-IMG_WIDTH = 1920
-IMG_HEIGHT = 1080
-XMIN = 1
-YMIN = 2
-XMAX = 3
-YMAX = 4
-csv_files = [
-    'data/csv/football_0.csv',
-    'data/csv/football_1.csv'
-]
-img_files = [
-    'data/pics/football_0.png',
-    'data/pics/football_1.png'
-]
-colours = [
-    (0, 255, 0), # 1
-    (255, 0, 0), # 2
-    (0, 0, 255), # 3
-    (143, 89, 255), # 4
-    (6, 39, 156), # 5
-    (92, 215, 206), # 6
-    (105, 139, 246), # 7
-    (84, 43, 0), # 8
-    (137, 171, 197), # 9
-    (147, 226, 255) # 10
-]
-
-# Euler ZYX Tait-Bryan angles (deg) of Cameras 0 and 1 w.r.t. global frame
-EULER_X_0 = 0.0
-EULER_Y_0 = 20.0
-EULER_Z_0 = -50.0
-EULER_X_1 = 0.0
-EULER_Y_1 = 30.0
-EULER_Z_1 = 0.0
-
-# get angle (radian) between two vectors a and b (represented as arrays)
-def get_angle(a, b):
-    dot_product = np.dot(a, b)
-    norm_product = np.linalg.norm(a) * np.linalg.norm(b)
-    return np.arccos(dot_product / norm_product)
-
-# extract data from csv file
-def extract_data(src):
-    extracted = []
-    with open (src, 'r') as csvfile:
-        csvreader = csv.reader(csvfile, quoting=csv.QUOTE_NONNUMERIC)
-        for row in csvreader:
-            extracted.append(row)
-    return extracted
 
 #############################
 # camera and topology classes
@@ -112,15 +44,15 @@ class delaunay_triangle:
         return self.base_ID_
     
     def get_base_angle(self):
-        return get_angle(self.neighbours_[0], self.neighbours_[1])
+        return img_lib.get_angle(self.neighbours_[0], self.neighbours_[1])
     
     def get_neighbour_angle_0(self):
-        angle_0 = get_angle(-self.neighbours_[0], \
+        angle_0 = img_lib.get_angle(-self.neighbours_[0], \
             np.subtract(self.neighbours_[1], self.neighbours_[0]))
         return angle_0
     
     def get_neighbour_angle_1(self):
-        angle_1 = get_angle(-self.neighbours_[1], \
+        angle_1 = img_lib.get_angle(-self.neighbours_[1], \
             np.subtract(self.neighbours_[0], self.neighbours_[1]))
         return angle_1
 
@@ -149,21 +81,11 @@ class topology_seq:
             total += triangle.get_base_angle()
         return total
 
-class camera:
+class camera(img_lib.camera_base):
 
     # extract data from csv files and generate other parameters
     def __init__(self, cam_ID, csv_file, img, eul_ang) -> None:
-
-        # csv and img data
-        self.cam_ID = cam_ID
-        self.csv_data = extract_data(csv_file)
-        self.img = cv2.imread(img)
-
-        # basic target data. IDs are zero indexed
-        self.num_of_targets = len(self.csv_data)
-        self.IDs = list(range(0,self.num_of_targets))
-        self.areas = np.ones(self.num_of_targets)
-        self.centroids = np.ones([self.num_of_targets,2])
+        super().__init__(cam_ID, csv_file, img)
 
         # transformed target data
         self.coords3d = np.zeros([self.num_of_targets,3])
@@ -193,21 +115,6 @@ class camera:
         for i in range(self.num_of_targets):
             t = topology_seq(i)
             self.T.append(t)
-    
-    # assign target IDs and extract areas + XY centroids from CSV data
-    # convert from image convention (origin at top left)
-    # to standard XY convention (origin at bottom left)
-    def get_target_areas_centroids(self):
-        id = 0
-        for row in self.csv_data:
-            width = abs(row[XMAX] - row[XMIN])
-            height = abs(row[YMAX] - row[YMIN])
-            self.areas[id] = width*height
-            cen_x = 0.5*(row[XMAX] + row[XMIN])
-            cen_y = IMG_HEIGHT - 0.5*(row[YMAX] + row[YMIN])
-            self.centroids[id][0] = cen_x
-            self.centroids[id][1] = cen_y
-            id += 1
     
     # generate 3d coords of all centroids relative to 1st target
     def generate_3d_coords(self):
@@ -284,7 +191,7 @@ def get_weighted_similarity(topology_seq_a, topology_seq_b):
 # main pipeline
 ###############
 
-if VISUALISE_3D:
+if parm.VISUALISE_3D:
     fig = plt.figure(figsize=plt.figaspect(0.5))
 else:
     fig = plt.figure()
@@ -292,8 +199,8 @@ else:
 
 # extract info on detected objects
 cameras = (
-    camera(0, csv_files[0], img_files[0], [EULER_X_0, EULER_Y_0, EULER_Z_0]), 
-    camera(1, csv_files[1], img_files[1], [EULER_X_1, EULER_Y_1, EULER_Z_1])
+    camera(0, parm.csv_files[0], parm.img_files[0], [parm.EULER_X_0, parm.EULER_Y_0, parm.EULER_Z_0]), 
+    camera(1, parm.csv_files[1], parm.img_files[1], [parm.EULER_X_1, parm.EULER_Y_1, parm.EULER_Z_1])
     )
 for cam in cameras:
     # transformation and topography map generation
@@ -304,7 +211,7 @@ for cam in cameras:
     cam.generate_delaunay_triangle_vectors()
 
     # 3d visualisation
-    if VISUALISE_3D:
+    if parm.VISUALISE_3D:
         ax = fig.add_subplot(1, 2, cam.cam_ID+1, projection='3d')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
@@ -332,35 +239,9 @@ for a in cameras[0].IDs:
         similarity = get_weighted_similarity(cameras[0].T[a], cameras[1].T[b])
         W[a,b] = similarity
 
-# "matched" - for each target ID in Camera 0 (represented by the row of "matched"), 
-# get the ID of the matched target in Camera 1 (represented by the value in "matched")
-matched = np.argmax(W, axis=1)
-
-# annotate re-id images
-combined_img = cv2.hconcat([cameras[0].img, cameras[1].img])
-
-for id0 in cameras[0].IDs:
-    # Camera 0 "id0" is matched with Camera 1 "id1"
-    id1 = matched[id0]
-
-    # generate target centroid coordinates to be annotated on the frame
-    id0_coords = cameras[0].centroids[id0].copy()
-    # transform from standard coords (origin at bottom left) to img coords (origin at top left)
-    id0_coords[1] = IMG_HEIGHT - id0_coords[1]
-    # convert centroid floats to int
-    id0_coords = [int(x) for x in id0_coords]
-    # convert to tuple to be compatible with OpenCV line
-    id0_coords = tuple(id0_coords)
-
-    id1_coords = cameras[1].centroids[id1].copy()
-    id1_coords[1] = IMG_HEIGHT - id1_coords[1]
-    # transpose to the right for Camera 1 IDs
-    id1_coords[0] += IMG_WIDTH
-    id1_coords = [int(x) for x in id1_coords]
-    id1_coords = tuple(id1_coords)
-
-    combined_img = cv2.line(combined_img, id0_coords, id1_coords, colours[id0%10], 3)
-
-cv2.imwrite('data/pics/saved.jpg', combined_img)
+# Re-ID visualisation
+img_lib.annotate_and_save_reid(cameras[0].img, cameras[1].img,
+                                cameras[0].centroids, cameras[1].centroids,
+                                cameras[0].IDs, W, use_max=True)
 
 plt.show()

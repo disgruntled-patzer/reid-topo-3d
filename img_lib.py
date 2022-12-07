@@ -19,6 +19,12 @@ def extract_data(src):
             extracted.append(row)
     return extracted
 
+# get angle (radian) between two vectors a and b (represented as arrays)
+def get_angle(a, b):
+    dot_product = np.dot(a, b)
+    norm_product = np.linalg.norm(a) * np.linalg.norm(b)
+    return np.arccos(dot_product / norm_product)
+
 # place original images side by side, annotate them with re-id results and save combined image
 # inputs:
 # 1. Images (CV Mat) and target centroids (ndarray) of Cameras 0 and 1

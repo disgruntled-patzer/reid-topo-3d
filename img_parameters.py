@@ -42,3 +42,15 @@ colours = [
     (137, 171, 197), # 9
     (147, 226, 255) # 10
 ]
+
+# visualise delaunay triangle topology in 2D or 3D
+VISUALISE_3D = False
+
+# Euler ZYX Tait-Bryan angles (deg) of Cameras 0 and 1 w.r.t. global frame
+# use these for scripts that require transformation of frames
+EULER_X_0 = 0.0
+EULER_Y_0 = 20.0
+EULER_Z_0 = -50.0
+EULER_X_1 = 0.0
+EULER_Y_1 = 30.0
+EULER_Z_1 = 0.0
