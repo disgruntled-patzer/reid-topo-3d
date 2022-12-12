@@ -180,7 +180,6 @@ else:
 cameras = (camera(0, parm.csv_files[0], parm.img_files[0]), 
             camera(1, parm.csv_files[1], parm.img_files[1]))
 for cam in cameras:
-    cam.get_target_areas_centroids()
     cam.generate_delaunay()
     if parm.VISUALISE_3D:
         x_data, y_data, z_data = cam.generate_3d_triangle_coords()

@@ -1,9 +1,11 @@
-# reid_convhull.py
+# reid_convhull_multi.py
 # Lau Yan Han and Lua Chong Ghee (2022)
 #
 # Overview:
-# Perform re-identification of targets across two images using the method 
-# described in Lua et al (2022): https://ieeexplore.ieee.org/abstract/document/9931699
+# Perform re-identification of targets across two images using modified method 
+# described in Lua et al (2022): https://ieeexplore.ieee.org/abstract/document/9931699.
+# Unlike reid_convhull.py, here we apply successive convex hull operations until
+# the number of inner points is less than 5.
 # 
 # Inputs: 
 # 1. csv files with detected targets (one for each target). Stored as
@@ -26,14 +28,22 @@ class camera (img_lib.camera_base):
     # initialise parameters from parent class
     def __init__(self, cam_ID, csv_file, img) -> None:
         super().__init__(cam_ID, csv_file, img)
+        self.hulls = []
+        self.hulls_nvertices = []
+        self.cross_ratio_seqs = []
+        self.count = 0
+        self.remaining_centroids = self.centroids.copy()
     
     # generate convex hull of detected targets and initialise list of cross ratios
+    # returns True if there are 5 or more convex hull vertices
     def generate_convexhull(self):
-        self.hull = ConvexHull(self.centroids)
+        self.hull = ConvexHull(self.remaining_centroids)
         self.hull_nvertices = len(self.hull.vertices)
         if self.hull_nvertices < 5:
-            raise Exception("Algorithm needs 5 or more convex hull vertices")
+            print("5 or less convex hull vertices, terminating cascade")
+            return False
         self.cross_ratio_seq = np.zeros(self.hull_nvertices)
+        return True
     
     # Given a convex hull vertex's position, get the target ID and centroids of the vertex and its 4 neighbours
     def get_vertex_and_neighbour_data(self, hull_pos):
@@ -48,7 +58,7 @@ class camera (img_lib.camera_base):
         target_centroids = np.zeros([5,2])
         for i in range(5):
             target_IDs[i] = self.hull.vertices[positions[i]]
-            target_centroids[i] = self.centroids[target_IDs[i]]  
+            target_centroids[i] = self.remaining_centroids[target_IDs[i]]  
         return target_IDs, target_centroids
     
     # calculate the cross ratio for a given vertex's position on the convex hull
@@ -72,6 +82,21 @@ class camera (img_lib.camera_base):
     # in the following order: pos+1, pos+2 ... and wraparound to 0, 1, ... pos-1
     def get_remaining_seq_cross_ratios(self, hull_pos):
         return np.concatenate((self.cross_ratio_seq[hull_pos+1:], self.cross_ratio_seq[:hull_pos]))
+    
+    # assign convex hull, nvertices, cross ratios to storage, update count
+    # returns true if there are 5 or more remaining centroids to generate another convex hull
+    def conv_hull_cascade(self):
+        self.hulls.append(self.hull)
+        self.hulls_nvertices.append(self.hull_nvertices)
+        self.cross_ratio_seqs.append(self.cross_ratio_seq)
+        self.count += 1
+        self.remaining_centroids = \
+            np.delete(self.remaining_centroids, self.hull.vertices.tolist(), axis=0)
+        if len(self.remaining_centroids) < 5:
+            print("5 or less inner centroids, terminating cascade")
+            return False
+        else:
+            return True
 
 ###############
 # main pipeline
@@ -85,9 +110,11 @@ ax.set_ylabel('Y')
 cameras = (camera(0, parm.csv_files[0], parm.img_files[0]), 
             camera(1, parm.csv_files[1], parm.img_files[1]))
 for cam in cameras:
-    # generate initial data
-    cam.generate_convexhull()
-    cam.cal_cross_ratio_seq()
+    # generate initial data, terminate loop if there are less than 5 vertices / inner pts
+    while cam.generate_convexhull():
+        cam.cal_cross_ratio_seq()
+        if not cam.conv_hull_cascade():
+            break
     # visualise convex hulls
     if cam.cam_ID:
         m = 'o'

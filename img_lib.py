@@ -25,6 +25,47 @@ def get_angle(a, b):
     norm_product = np.linalg.norm(a) * np.linalg.norm(b)
     return np.arccos(dot_product / norm_product)
 
+# return intersection of two 2d lines in x-y coordinates (ndarray format)
+# input: endpoints of both lines (x-y ndarray format)
+# https://www.geeksforgeeks.org/program-for-point-of-intersection-of-two-lines/
+def two_lines_intersection(line1_ptA, line1_ptB, line2_ptA, line2_ptB):
+    x_1A = line1_ptA[0]
+    y_1A = line1_ptA[1]
+    x_1B = line1_ptB[0]
+    y_1B = line1_ptB[1]
+    x_2A = line2_ptA[0]
+    y_2A = line2_ptA[1]
+    x_2B = line2_ptB[0]
+    y_2B = line2_ptB[1]
+
+    # Line 1 represented as a1x + b1y = c1
+    a1 = y_1B - y_1A
+    b1 = x_1A - x_1B
+    c1 = a1*x_1A + b1*y_1A
+
+    # Line 2 represented as a2x + b2y = c2
+    a2 = y_2B - y_2A
+    b2 = x_2A - x_2B
+    c2 = a2*x_2A + b2*y_2A
+
+    det = a1*b2 - a2*b1
+    if det:
+        x = (b2*c1 - b1*c2)/det
+        y = (a1*c2 - a2*c1)/det
+    else:
+        # lines are parallel if determinant = 0
+        x = 1e10
+        y = 1e10
+    return np.array([x, y])
+
+# return cross ratio of 4 collinear 2D points (represented as arrays)
+def cross_ratio(a, b, c, d):
+    ac = np.linalg.norm(np.subtract(a,c))
+    bd = np.linalg.norm(np.subtract(b,d))
+    bc = np.linalg.norm(np.subtract(b,c))
+    ad = np.linalg.norm(np.subtract(a,d))
+    return (ac*bd)/(bc*ad)
+
 # place original images side by side, annotate them with re-id results and save combined image
 # inputs:
 # 1. Images (CV Mat) and target centroids (ndarray) of Cameras 0 and 1
@@ -81,6 +122,7 @@ class camera_base():
         self.IDs = list(range(0,self.num_of_targets))
         self.areas = np.ones(self.num_of_targets)
         self.centroids = np.ones([self.num_of_targets,2])
+        self.get_target_areas_centroids()
 
     # assign target IDs and extract areas + XY centroids from CSV data
     # convert from image convention (origin at top left)

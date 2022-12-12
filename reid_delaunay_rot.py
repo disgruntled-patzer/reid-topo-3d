@@ -204,7 +204,6 @@ cameras = (
     )
 for cam in cameras:
     # transformation and topography map generation
-    cam.get_target_areas_centroids()
     cam.generate_3d_coords()
     cam.transform_coords()
     cam.generate_delaunay()
