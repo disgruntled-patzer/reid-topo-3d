@@ -4,3 +4,6 @@ runs/*
 # pycache files
 __pycache__/*
 *.pyc
+
+# yolov5 pt files
+*.pt
