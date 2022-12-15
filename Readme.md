@@ -7,7 +7,7 @@ This is a work in progress and is not experimentally verified yet.
 The algorithm extends on the following works to match similar targets based on their relative positions and angles:
 
 * Li et al (2022)'s triangular topological Re-ID method
-* Ong et al (2022)'s convex hull based Re-ID method
+* Lua et al (2022)'s convex hull based Re-ID method
 * Seah et al (2022)'s method for estimating relative 3D coordinates using target size.
 
 # Dependencies
