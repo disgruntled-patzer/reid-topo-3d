@@ -23,16 +23,23 @@ from scipy.spatial import ConvexHull
 # functions and parameters
 ##########################
 
+class hull_data():
+    def __init__(self, convhull, original_IDs, cross_ratio_seq) -> None:
+        self.hull = convhull
+        self.nvertices = len(convhull.vertices)
+        self.original_IDs = original_IDs
+        self.cross_ratio_seq = cross_ratio_seq
+
 class camera (img_lib.camera_base):
 
     # initialise parameters from parent class
     def __init__(self, cam_ID, csv_file, img) -> None:
         super().__init__(cam_ID, csv_file, img)
         self.hulls = []
-        self.hulls_nvertices = []
-        self.cross_ratio_seqs = []
-        self.count = 0
         self.remaining_centroids = self.centroids.copy()
+
+        # dictionary that maps centroids (in tuple form) back to their original target IDs
+        self.centroid_to_ID = {tuple(centroid): pos for pos, centroid in enumerate(self.centroids)}
     
     # generate convex hull of detected targets and initialise list of cross ratios
     # returns True if there are 5 or more convex hull vertices
@@ -80,16 +87,26 @@ class camera (img_lib.camera_base):
     
     # takes a convex vertex position (pos) and returns cross ratios of the remaining sequence
     # in the following order: pos+1, pos+2 ... and wraparound to 0, 1, ... pos-1
-    def get_remaining_seq_cross_ratios(self, hull_pos):
-        return np.concatenate((self.cross_ratio_seq[hull_pos+1:], self.cross_ratio_seq[:hull_pos]))
+    def get_remaining_seq_cross_ratios(self, layer, hull_pos):
+        cross_ratio_seq = self.hulls[layer].cross_ratio_seq
+        return np.concatenate((cross_ratio_seq[hull_pos+1:], cross_ratio_seq[:hull_pos]))
     
-    # assign convex hull, nvertices, cross ratios to storage, update count
+    # successive convex hull cascade operation
     # returns true if there are 5 or more remaining centroids to generate another convex hull
     def conv_hull_cascade(self):
-        self.hulls.append(self.hull)
-        self.hulls_nvertices.append(self.hull_nvertices)
-        self.cross_ratio_seqs.append(self.cross_ratio_seq)
-        self.count += 1
+
+        # recover the original target IDs of each vertex using the centroids
+        hull_centroids = self.hull.points[self.hull.vertices]
+        original_IDs = np.zeros([self.hull_nvertices], dtype=int)
+        for pos, cen in enumerate(hull_centroids):
+            ID = self.centroid_to_ID[tuple(cen)]
+            original_IDs[pos] = ID
+
+        # assign existing convex hull and corresponding data to "storage"
+        self.hulls.append(hull_data(self.hull, original_IDs, self.cross_ratio_seq))
+
+        # update the remaining centroids. Note that the IDs will change for the next loop 
+        # as we have to delete items (hence the need to recover original target IDs)
         self.remaining_centroids = \
             np.delete(self.remaining_centroids, self.hull.vertices.tolist(), axis=0)
         if len(self.remaining_centroids) < 5:
@@ -126,12 +143,17 @@ for cam in cameras:
 
 # associate across cameras
 assoc_err = 1e5*np.ones([cameras[0].num_of_targets, cameras[1].num_of_targets])
-for pos_0, ID_0 in enumerate(cameras[0].hull.vertices):
-    cross_ratio_seq_0 = cameras[0].get_remaining_seq_cross_ratios(pos_0)
-    for pos_1, ID_1 in enumerate(cameras[1].hull.vertices):
-        cross_ratio_seq_1 = cameras[1].get_remaining_seq_cross_ratios(pos_1)
-        cross_ratio_err = np.abs(np.subtract(cross_ratio_seq_1, cross_ratio_seq_0))
-        assoc_err[ID_0][ID_1] = np.mean(cross_ratio_err)
+# assumption: Both cameras have same number of convex hull layers
+for layer in range(len(cameras[0].hulls)):
+    for pos_0, ID_0 in enumerate(cameras[0].hulls[layer].hull.vertices):
+        # recover cross ratio sequences and original target ID of each vertex
+        cross_ratio_seq_0 = cameras[0].get_remaining_seq_cross_ratios(layer, pos_0)
+        original_ID_0 = cameras[0].hulls[layer].original_IDs[pos_0]
+        for pos_1, ID_1 in enumerate(cameras[1].hulls[layer].hull.vertices):
+            cross_ratio_seq_1 = cameras[1].get_remaining_seq_cross_ratios(layer, pos_1)
+            cross_ratio_err = np.abs(np.subtract(cross_ratio_seq_1, cross_ratio_seq_0))
+            original_ID_1 = cameras[1].hulls[layer].original_IDs[pos_1]
+            assoc_err[original_ID_0][original_ID_1] = np.mean(cross_ratio_err)
 
 # Re-ID visualisation
 img_lib.annotate_and_save_reid(cameras[0].img, cameras[1].img,
