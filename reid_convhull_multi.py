@@ -46,14 +46,10 @@ class camera (img_lib.camera_base):
     def generate_convexhull(self):
         self.hull = ConvexHull(self.remaining_centroids)
         self.hull_nvertices = len(self.hull.vertices)
-        print(self.hull.vertices)
-        print(self.hull.points)
         if self.hull_nvertices < 5:
             print("5 or less convex hull vertices, terminating cascade")
             return False
         self.cross_ratio_seq = np.zeros(self.hull_nvertices)
-        print("Convex Hull IDs:")
-        print(self.hull.vertices)
         return True
     
     # Given a convex hull vertex's position, get the target ID and centroids of the vertex and its 4 neighbours
@@ -108,17 +104,11 @@ class camera (img_lib.camera_base):
 
         # assign existing convex hull and corresponding data to "storage"
         self.hulls.append(hull_data(self.hull, original_IDs, self.cross_ratio_seq))
-        print("Original IDs:")
-        print(original_IDs)
 
         # update the remaining centroids. Note that the IDs will change for the next loop 
         # as we have to delete items (hence the need to recover original target IDs)
-        print("Initial centroids: ")
-        print(self.remaining_centroids)
         self.remaining_centroids = \
             np.delete(self.remaining_centroids, self.hull.vertices.tolist(), axis=0)
-        print("Final centroids:")
-        print(self.remaining_centroids)
         if len(self.remaining_centroids) < 5:
             print("5 or less inner centroids, terminating cascade")
             return False
